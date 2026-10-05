@@ -1,0 +1,70 @@
+import joblib
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+st.set_page_config(page_title="Analizador de partidos", page_icon="⚽")
+
+@st.cache_resource
+def cargar():
+    p = joblib.load("modelo_apuestas.joblib")
+    h = pd.read_csv("historial.csv", parse_dates=["Date"])
+    return p["modelo"], p["columnas"], p["elo"], h
+
+modelo, columnas, elo, h = cargar()
+
+def historial_equipo(liga, equipo):
+    d = h[(h.Liga == liga) & ((h.HomeTeam == equipo) | (h.AwayTeam == equipo))].sort_values("Date")
+    loc = d.HomeTeam == equipo
+    o = pd.DataFrame({"Date": d.Date, "Sede": np.where(loc, "L", "V"),
+                      "GF": np.where(loc, d.FTHG, d.FTAG), "GC": np.where(loc, d.FTAG, d.FTHG)})
+    o["Pts"] = np.where(o.GF > o.GC, 3, np.where(o.GF == o.GC, 1, 0))
+    return o
+
+def calcular(liga, local, visitante):
+    fecha = pd.Timestamp.today().normalize()
+    f, forma = {}, {}
+    for p, eq, sede in [("L_", local, "L"), ("V_", visitante, "V")]:
+        d = historial_equipo(liga, eq)
+        u5, u10 = d.tail(5), d.tail(10)
+        f[p + "GF_5"], f[p + "GC_5"], f[p + "Pts_5"] = u5.GF.mean(), u5.GC.mean(), u5.Pts.mean()
+        f[p + "GD_10"] = (u10.GF - u10.GC).mean()
+        f[p + "PtsSede_5"] = d[d.Sede == sede].tail(5).Pts.mean()
+        f[p + "Descanso"] = min((fecha - d.Date.iloc[-1]).days, 14)
+        f[p + "Elo"] = elo.get((liga, eq), 1500)
+        forma[eq] = (u5.Pts.sum(), u5.GF.sum(), u5.GC.sum())
+    f["Dif_Elo"] = f["L_Elo"] - f["V_Elo"]
+    f["Liga_" + liga] = 1.0
+    x = pd.DataFrame([f]).reindex(columns=columnas, fill_value=0.0)
+    pa, pe, ph = modelo.predict_proba(x)[0]   # orden: A, D, H
+    return ph, pe, pa, f, forma
+
+st.title("⚽ Analizador de partidos")
+st.caption("Herramienta de análisis estadístico. No es consejo de apuestas.")
+
+liga = st.selectbox("Liga", sorted(h.Liga.unique()))
+recientes = h[(h.Liga == liga) & (h.Date >= h.Date.max() - pd.Timedelta(days=365))]
+equipos = sorted(set(recientes.HomeTeam) | set(recientes.AwayTeam))
+local = st.selectbox("Local", equipos)
+visitante = st.selectbox("Visitante", [e for e in equipos if e != local])
+
+with st.expander("Comparar con cuotas (opcional)"):
+    c1, c2, c3 = st.columns(3)
+    cl = c1.number_input("Local", min_value=0.0, value=0.0, step=0.05)
+    ce = c2.number_input("Empate", min_value=0.0, value=0.0, step=0.05)
+    cv = c3.number_input("Visitante", min_value=0.0, value=0.0, step=0.05)
+
+if st.button("Analizar", type="primary"):
+    ph, pe, pa, f, forma = calcular(liga, local, visitante)
+    a, b, c = st.columns(3)
+    a.metric("Gana local", f"{ph:.1%}")
+    b.metric("Empate", f"{pe:.1%}")
+    c.metric("Gana visitante", f"{pa:.1%}")
+    st.write(f"**Doble oportunidad:** Local o empate {ph+pe:.1%} · "
+             f"Local o visitante {ph+pa:.1%} · Empate o visitante {pe+pa:.1%}")
+    st.write(f"**Elo:** {local} {f['L_Elo']:.0f} · {visitante} {f['V_Elo']:.0f}")
+    for eq, (pts, gf, gc) in forma.items():
+        st.write(f"**Últimos 5 de {eq}:** {pts} puntos, {gf} goles a favor, {gc} en contra")
+    if cl and ce and cv:
+        st.write("**Valor esperado por unidad apostada** (por debajo de 1 pierde en promedio):")
+        st.write(f"Local {ph*cl:.2f} · Empate {pe*ce:.2f} · Visitante {pa*cv:.2f}")
