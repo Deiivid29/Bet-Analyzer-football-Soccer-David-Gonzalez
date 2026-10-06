@@ -2,11 +2,11 @@ import gspread
 import joblib
 import numpy as np
 import pandas as pd
+import requests
 import streamlit as st
+import xml.etree.ElementTree as ET
 from google.oauth2.service_account import Credentials
 from scipy.stats import poisson
-import requests
-import xml.etree.ElementTree as ET
 from urllib.parse import quote
 
 st.set_page_config(page_title="Analizador de partidos", page_icon="⚽")
@@ -163,6 +163,8 @@ if sheets_ok:
             st.warning(f"No pude revisar los resultados automáticamente: {e}")
     inicial = leer_bank_inicial()
     bank = inicial + df[df.Resultado.isin(CERRADAS)].Ganancia.sum()
+
+# ---------- Noticias ----------
 ALIAS = {
     "Guadalajara Chivas": "Chivas", "UNAM Pumas": "Pumas", "Atl. San Luis": "Atlético San Luis",
     "Club Leon": "León", "Club America": "América", "Queretaro": "Querétaro",
@@ -183,6 +185,8 @@ def noticias(equipo, liga):
     r.raise_for_status()
     items = ET.fromstring(r.content).findall(".//item")[:6]
     return [(i.findtext("title"), i.findtext("link")) for i in items]
+
+# ---------- Panel lateral: convertidor de momios ----------
 with st.sidebar:
     st.subheader("Convertidor de momios")
     am = st.number_input("Momio americano (ej. -150 o +200)", value=0, step=5)
@@ -232,7 +236,7 @@ with tab1:
         st.write(f"**Over:** 1.5 → {p_over(1.5):.1%} · 2.5 → {p_over(2.5):.1%} · 3.5 → {p_over(3.5):.1%}")
         st.write(f"**Elo:** {an['local']} {an['f']['L_Elo']:.0f} · "
                  f"{an['visitante']} {an['f']['V_Elo']:.0f}")
-                for eq, (pts, gf, gc) in an["forma"].items():
+        for eq, (pts, gf, gc) in an["forma"].items():
             st.write(f"**Últimos 5 de {eq}:** {pts} puntos, {gf} goles a favor, {gc} en contra")
 
         if st.button("📰 Noticias recientes (lesiones y bajas)"):
