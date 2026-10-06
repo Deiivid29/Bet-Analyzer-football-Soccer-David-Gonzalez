@@ -114,23 +114,29 @@ def resultado_apuesta(fila, partido):
     return "Ganada" if gano else "Perdida"
 
 def cerrar_automaticas(df):
-    cerradas = 0
+    cerradas, notas = 0, []
     for i, fila in df[df.Resultado == "Pendiente"].iterrows():
+        nombre = f"{fila.Local} vs {fila.Visitante} ({fila.Seleccion})"
         fecha = leer_fecha(fila.Fecha)
         if pd.isna(fecha):
+            notas.append(f"{nombre}: no pude leer la fecha '{fila.Fecha}'")
             continue
+        desde, hasta = fecha - pd.Timedelta(days=1), fecha + pd.Timedelta(days=30)
         cand = h[(h.Liga == fila.Liga) & (h.HomeTeam == fila.Local)
                  & (h.AwayTeam == fila.Visitante)
-                 & (h.Date >= fecha - pd.Timedelta(days=1))
-                 & (h.Date <= fecha + pd.Timedelta(days=30))].sort_values("Date")
+                 & (h.Date >= desde) & (h.Date <= hasta)].sort_values("Date")
         if cand.empty:
+            notas.append(f"{nombre}: no hay resultado en los datos entre "
+                         f"{desde.date()} y {hasta.date()} (liga '{fila.Liga}')")
             continue
         res = resultado_apuesta(fila, cand.iloc[0])
         if res is None:
+            notas.append(f"{nombre}: no reconozco la selección '{fila.Seleccion}'")
             continue
         gan = fila.Monto * (fila.Cuota - 1) if res == "Ganada" else -fila.Monto
         cerrar_apuesta(i, res, gan)
         cerradas += 1
+    st.session_state["notas"] = notas
     return cerradas
 
 try:
