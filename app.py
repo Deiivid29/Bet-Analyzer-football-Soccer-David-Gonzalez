@@ -1,13 +1,18 @@
+import difflib
+import re
+import unicodedata
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import quote
+import xml.etree.ElementTree as ET
+
 import gspread
 import joblib
 import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-import xml.etree.ElementTree as ET
 from google.oauth2.service_account import Credentials
 from scipy.stats import poisson
-from urllib.parse import quote
 
 st.set_page_config(page_title="Analizador de partidos", page_icon="⚽")
 
@@ -35,6 +40,10 @@ def historial_equipo(liga, equipo):
     o["Pts"] = np.where(o.GF > o.GC, 3, np.where(o.GF == o.GC, 1, 0))
     return o
 
+def equipos_de(liga):
+    rec = h[(h.Liga == liga) & (h.Date >= h.Date.max() - pd.Timedelta(days=365))]
+    return sorted(set(rec.HomeTeam) | set(rec.AwayTeam))
+
 def calcular(liga, local, visitante):
     fecha = pd.Timestamp.today().normalize()
     f, forma = {}, {}
@@ -54,6 +63,18 @@ def calcular(liga, local, visitante):
     glocal = float(gol_l.predict(x)[0])
     gvisit = float(gol_v.predict(x)[0])
     return ph, pe, pa, f, forma, glocal, gvisit
+
+def analizar(liga, local, visitante):
+    ph, pe, pa, f, forma, glocal, gvisit = calcular(liga, local, visitante)
+    st.session_state["an"] = dict(liga=liga, local=local, visitante=visitante,
+                                  ph=ph, pe=pe, pa=pa, f=f, forma=forma,
+                                  glocal=glocal, gvisit=gvisit)
+
+def elegir_partido(liga, local, visitante):
+    st.session_state["liga_sel"] = liga
+    st.session_state["local_sel"] = local
+    st.session_state["visit_sel"] = visitante
+    analizar(liga, local, visitante)
 
 # ---------- Google Sheets ----------
 @st.cache_resource
@@ -186,6 +207,74 @@ def noticias(equipo, liga):
     items = ET.fromstring(r.content).findall(".//item")[:6]
     return [(i.findtext("title"), i.findtext("link")) for i in items]
 
+# ---------- Calendario (marcador público de ESPN, no oficial) ----------
+LIGAS_ESPN = {"Liga MX": "mex.1", "MLS": "usa.1", "Premier League": "eng.1",
+              "La Liga": "esp.1", "Serie A": "ita.1", "Bundesliga": "ger.1",
+              "Ligue 1": "fra.1"}
+ESTADOS = {"Scheduled": "Programado", "Full Time": "Finalizado", "In Progress": "En juego",
+           "Halftime": "Medio tiempo", "Postponed": "Pospuesto", "Canceled": "Cancelado",
+           "Final": "Finalizado"}
+EXTRA = {
+    "Paris SG": ["Paris Saint Germain"], "Wolves": ["Wolverhampton Wanderers"],
+    "Brighton": ["Brighton Hove Albion"], "Ath Madrid": ["Atletico Madrid"],
+    "Vallecano": ["Rayo Vallecano"], "Celta": ["Celta Vigo"], "Espanol": ["Espanyol"],
+    "M'gladbach": ["Borussia Monchengladbach"], "St Etienne": ["Saint Etienne"],
+    "Inter": ["Inter Milan", "Internazionale"], "Man United": ["Manchester United"],
+    "Man City": ["Manchester City"], "Ath Bilbao": ["Athletic Club"],
+    "Guadalajara Chivas": ["Guadalajara"], "UNAM Pumas": ["Pumas UNAM"],
+}
+
+def norm(s):
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+    s = re.sub(r"[^a-z0-9 ]", " ", s)
+    return " ".join(t for t in s.split() if t not in {"fc", "cf", "club", "ac", "sc", "afc", "cd"})
+
+def mapear(nombre, equipos):
+    n = norm(nombre)
+    mejor, puntaje = None, 0.0
+    for eq in equipos:
+        for alt in [eq, ALIAS.get(eq)] + EXTRA.get(eq, []):
+            if not alt:
+                continue
+            a = norm(alt)
+            if a == n or sorted(a.split()) == sorted(n.split()):
+                return eq
+            if len(a) >= 4 and len(n) >= 4 and (a in n or n in a):
+                s = 0.9
+            else:
+                s = difflib.SequenceMatcher(None, a, n).ratio()
+            if s > puntaje:
+                mejor, puntaje = eq, s
+    return mejor if puntaje >= 0.78 else None
+
+def _consulta(args):
+    liga, slug, fecha = args
+    try:
+        r = requests.get(
+            f"https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/scoreboard",
+            params={"dates": fecha}, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+        salida = []
+        for ev in r.json().get("events", []):
+            comp = ev["competitions"][0]
+            eq = {c["homeAway"]: c["team"]["displayName"] for c in comp["competitors"]}
+            ts = pd.Timestamp(ev["date"]).tz_convert("America/Mexico_City")
+            estado = ev.get("status", {}).get("type", {}).get("description", "")
+            salida.append({"liga": liga, "orden": ts.isoformat(), "hora": ts.strftime("%H:%M"),
+                           "local": eq.get("home", "?"), "visitante": eq.get("away", "?"),
+                           "estado": ESTADOS.get(estado, estado)})
+        return salida, None
+    except Exception:
+        return [], liga
+
+@st.cache_data(ttl=900)
+def partidos_del_dia(fecha):
+    with ThreadPoolExecutor(max_workers=7) as ex:
+        res = list(ex.map(_consulta, [(l, s, fecha) for l, s in LIGAS_ESPN.items()]))
+    partidos = sorted([p for salida, _ in res for p in salida], key=lambda p: p["orden"])
+    fallos = [f for _, f in res if f]
+    return partidos, fallos
+
 # ---------- Panel lateral: convertidor de momios ----------
 with st.sidebar:
     st.subheader("Convertidor de momios")
@@ -204,17 +293,41 @@ tab1, tab2, tab3 = st.tabs(["🔎 Analizar", "📝 Mis apuestas", "📊 Panel"])
 
 # ===== Pestaña 1: Analizar =====
 with tab1:
-    liga = st.selectbox("Liga", sorted(h.Liga.unique()))
-    recientes = h[(h.Liga == liga) & (h.Date >= h.Date.max() - pd.Timedelta(days=365))]
-    equipos = sorted(set(recientes.HomeTeam) | set(recientes.AwayTeam))
-    local = st.selectbox("Local", equipos)
-    visitante = st.selectbox("Visitante", [e for e in equipos if e != local])
+    with st.expander("📅 Calendario de partidos", expanded=False):
+        hoy_mx = pd.Timestamp.now(tz="America/Mexico_City").date()
+        dia = st.date_input("Fecha", value=hoy_mx, format="DD/MM/YYYY")
+        lista, fallos = partidos_del_dia(dia.strftime("%Y%m%d"))
+        if fallos:
+            st.caption("No pude consultar: " + ", ".join(fallos))
+        if not lista and not fallos:
+            st.info("No hay partidos de tus ligas en esa fecha.")
+        for p_ in lista:
+            eqs = equipos_de(p_["liga"])
+            loc_m = mapear(p_["local"], eqs)
+            vis_m = mapear(p_["visitante"], eqs)
+            st.markdown(f"**{p_['liga']}** · {p_['hora']} · {p_['local']} vs "
+                        f"{p_['visitante']} · _{p_['estado']}_")
+            if loc_m and vis_m and loc_m != vis_m:
+                st.button("Analizar este partido",
+                          key=f"cal_{p_['liga']}_{loc_m}_{vis_m}_{dia}",
+                          on_click=elegir_partido, args=(p_["liga"], loc_m, vis_m))
+            else:
+                st.caption("No pude emparejar estos equipos con mis datos "
+                           "(¿recién ascendido o nombre distinto?). Elígelos a mano abajo.")
+
+    ligas_disp = sorted(h.Liga.unique())
+    liga = st.selectbox("Liga", ligas_disp, key="liga_sel")
+    equipos = equipos_de(liga)
+    if st.session_state.get("local_sel") not in equipos:
+        st.session_state.pop("local_sel", None)
+    local = st.selectbox("Local", equipos, key="local_sel")
+    opciones_vis = [e for e in equipos if e != local]
+    if st.session_state.get("visit_sel") not in opciones_vis:
+        st.session_state.pop("visit_sel", None)
+    visitante = st.selectbox("Visitante", opciones_vis, key="visit_sel")
 
     if st.button("Analizar", type="primary"):
-        ph, pe, pa, f, forma, glocal, gvisit = calcular(liga, local, visitante)
-        st.session_state["an"] = dict(liga=liga, local=local, visitante=visitante,
-                                      ph=ph, pe=pe, pa=pa, f=f, forma=forma,
-                                      glocal=glocal, gvisit=gvisit)
+        analizar(liga, local, visitante)
 
     an = st.session_state.get("an")
     if an and "glocal" not in an:
