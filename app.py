@@ -160,6 +160,15 @@ if sheets_ok:
             st.warning(f"No pude revisar los resultados automáticamente: {e}")
     inicial = leer_bank_inicial()
     bank = inicial + df[df.Resultado.isin(CERRADAS)].Ganancia.sum()
+with st.sidebar:
+    st.subheader("Convertidor de momios")
+    am = st.number_input("Momio americano (ej. -150 o +200)", value=0, step=5)
+    if am >= 100:
+        st.write(f"Decimal: **{1 + am / 100:.2f}**")
+    elif am <= -100:
+        st.write(f"Decimal: **{1 + 100 / abs(am):.2f}**")
+    else:
+        st.caption("Escribe un momio de +100 en adelante o de -100 hacia abajo.")
 
 # ---------- Interfaz ----------
 st.title("⚽ Analizador de partidos")
