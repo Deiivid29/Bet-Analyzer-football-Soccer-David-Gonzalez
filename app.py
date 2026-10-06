@@ -5,6 +5,9 @@ import pandas as pd
 import streamlit as st
 from google.oauth2.service_account import Credentials
 from scipy.stats import poisson
+import requests
+import xml.etree.ElementTree as ET
+from urllib.parse import quote
 
 st.set_page_config(page_title="Analizador de partidos", page_icon="⚽")
 
@@ -160,6 +163,26 @@ if sheets_ok:
             st.warning(f"No pude revisar los resultados automáticamente: {e}")
     inicial = leer_bank_inicial()
     bank = inicial + df[df.Resultado.isin(CERRADAS)].Ganancia.sum()
+ALIAS = {
+    "Guadalajara Chivas": "Chivas", "UNAM Pumas": "Pumas", "Atl. San Luis": "Atlético San Luis",
+    "Club Leon": "León", "Club America": "América", "Queretaro": "Querétaro",
+    "Juarez": "FC Juárez", "Man City": "Manchester City", "Man United": "Manchester United",
+    "Nott'm Forest": "Nottingham Forest", "Ath Madrid": "Atlético de Madrid",
+    "Ath Bilbao": "Athletic Club", "Sociedad": "Real Sociedad", "Paris SG": "PSG",
+    "M'gladbach": "Borussia Mönchengladbach", "Ein Frankfurt": "Eintracht Frankfurt",
+    "Inter": "Inter de Milán", "Milan": "AC Milan", "Betis": "Real Betis",
+    "St. Louis City": "St. Louis City SC",
+}
+
+@st.cache_data(ttl=1800)
+def noticias(equipo, liga):
+    nombre = ALIAS.get(equipo, equipo)
+    q = f"{nombre} {liga} (lesión OR lesionado OR baja OR duda OR suspendido) when:7d"
+    url = f"https://news.google.com/rss/search?q={quote(q)}&hl=es-419&gl=MX&ceid=MX:es-419"
+    r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+    r.raise_for_status()
+    items = ET.fromstring(r.content).findall(".//item")[:6]
+    return [(i.findtext("title"), i.findtext("link")) for i in items]
 with st.sidebar:
     st.subheader("Convertidor de momios")
     am = st.number_input("Momio americano (ej. -150 o +200)", value=0, step=5)
@@ -211,6 +234,17 @@ with tab1:
                  f"{an['visitante']} {an['f']['V_Elo']:.0f}")
         for eq, (pts, gf, gc) in an["forma"].items():
             st.write(f"**Últimos 5 de {eq}:** {pts} puntos, {gf} goles a favor, {gc} en contra")
+                          if st.button("📰 Noticias recientes (lesiones y bajas)"):
+            for eq in (an["local"], an["visitante"]):
+                st.markdown(f"**{eq}**")
+                try:
+                    items = noticias(eq, an["liga"])
+                    if not items:
+                        st.caption("Sin noticias recientes de lesiones o bajas.")
+                    for t, l in items:
+                        st.markdown(f"- [{t}]({l})")
+                except Exception as e:
+                    st.caption(f"No pude cargar las noticias: {e}")
 
         st.markdown("#### Cuotas del mercado (deja en 0 las que no uses)")
         c1, c2, c3 = st.columns(3)
