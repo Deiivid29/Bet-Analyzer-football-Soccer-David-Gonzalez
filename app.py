@@ -232,9 +232,10 @@ with tab1:
         st.write(f"**Over:** 1.5 → {p_over(1.5):.1%} · 2.5 → {p_over(2.5):.1%} · 3.5 → {p_over(3.5):.1%}")
         st.write(f"**Elo:** {an['local']} {an['f']['L_Elo']:.0f} · "
                  f"{an['visitante']} {an['f']['V_Elo']:.0f}")
-        for eq, (pts, gf, gc) in an["forma"].items():
+                for eq, (pts, gf, gc) in an["forma"].items():
             st.write(f"**Últimos 5 de {eq}:** {pts} puntos, {gf} goles a favor, {gc} en contra")
-                          if st.button("📰 Noticias recientes (lesiones y bajas)"):
+
+        if st.button("📰 Noticias recientes (lesiones y bajas)"):
             for eq in (an["local"], an["visitante"]):
                 st.markdown(f"**{eq}**")
                 try:
