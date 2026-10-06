@@ -82,6 +82,57 @@ def cerrar_apuesta(idx, resultado, ganancia):
     ws.update_cell(idx + 2, 11, float(ganancia))  # columna K: Ganancia
     leer_apuestas.clear()
 
+# ---------- Cierre automático ----------
+def leer_fecha(x):
+    f = pd.to_datetime(str(x), format="%Y-%m-%d", errors="coerce")
+    if pd.isna(f):
+        f = pd.to_datetime(str(x), dayfirst=True, errors="coerce")
+    return f
+
+def resultado_apuesta(fila, partido):
+    gl, gv = partido.FTHG, partido.FTAG
+    total = gl + gv
+    sel = str(fila.Seleccion)
+    if sel == f"Gana {fila.Local}":
+        gano = gl > gv
+    elif sel == f"Gana {fila.Visitante}":
+        gano = gv > gl
+    elif sel == "Empate":
+        gano = gl == gv
+    elif sel == "Local o empate":
+        gano = gl >= gv
+    elif sel == "Local o visitante":
+        gano = gl != gv
+    elif sel == "Empate o visitante":
+        gano = gv >= gl
+    elif sel.startswith("Over "):
+        gano = total > float(sel.split()[1])
+    elif sel.startswith("Under "):
+        gano = total < float(sel.split()[1])
+    else:
+        return None
+    return "Ganada" if gano else "Perdida"
+
+def cerrar_automaticas(df):
+    cerradas = 0
+    for i, fila in df[df.Resultado == "Pendiente"].iterrows():
+        fecha = leer_fecha(fila.Fecha)
+        if pd.isna(fecha):
+            continue
+        cand = h[(h.Liga == fila.Liga) & (h.HomeTeam == fila.Local)
+                 & (h.AwayTeam == fila.Visitante)
+                 & (h.Date >= fecha - pd.Timedelta(days=1))
+                 & (h.Date <= fecha + pd.Timedelta(days=30))].sort_values("Date")
+        if cand.empty:
+            continue
+        res = resultado_apuesta(fila, cand.iloc[0])
+        if res is None:
+            continue
+        gan = fila.Monto * (fila.Cuota - 1) if res == "Ganada" else -fila.Monto
+        cerrar_apuesta(i, res, gan)
+        cerradas += 1
+    return cerradas
+
 try:
     libro()
     sheets_ok = True
@@ -92,6 +143,15 @@ except Exception as e:
 df, inicial, bank = None, None, None
 if sheets_ok:
     df = leer_apuestas()
+    if not st.session_state.get("auto_revisado"):
+        st.session_state["auto_revisado"] = True
+        try:
+            n = cerrar_automaticas(df)
+            if n:
+                df = leer_apuestas()
+                st.toast(f"Se cerraron {n} apuestas automáticamente")
+        except Exception as e:
+            st.warning(f"No pude revisar los resultados automáticamente: {e}")
     inicial = leer_bank_inicial()
     bank = inicial + df[df.Resultado.isin(CERRADAS)].Ganancia.sum()
 
@@ -116,7 +176,7 @@ with tab1:
 
     an = st.session_state.get("an")
     if an and "glocal" not in an:
-        an = None   # análisis viejo de una versión anterior: pedir analizar de nuevo
+        an = None
     if an:
         ph, pe, pa = an["ph"], an["pe"], an["pa"]
         lam = an["glocal"] + an["gvisit"]
@@ -181,8 +241,9 @@ with tab1:
             st.markdown("#### Sugerencias")
             st.dataframe(pd.DataFrame(filas), hide_index=True)
             st.caption("Regla: se sugiere apostar si el valor esperado es al menos 1.05. "
-                       "En el backtest con datos pasados esta regla perdió dinero, porque el modelo "
-                       "todavía está por debajo de las casas. Úsala como práctica, no como señal.")
+                       "En pruebas con datos pasados, esta regla perdió bastante en el resultado del "
+                       "partido (ROI de -14%) y quedó cerca del empate en over/under 2.5 (ROI de -0.2%, "
+                       "con un margen de error de unos 3 puntos). Úsala como práctica, no como señal.")
 
             if sheets_ok:
                 st.markdown("#### Registrar apuesta simulada")
@@ -201,21 +262,31 @@ with tab1:
                         guardar_apuesta([pd.Timestamp.today().strftime("%Y-%m-%d"), an["liga"],
                                          an["local"], an["visitante"], mercado, elegida,
                                          float(cuota), float(monto), float(prob), "Pendiente", 0])
-                        st.success("Apuesta registrada. Ciérrala en la pestaña 'Mis apuestas' cuando termine el partido.")
+                        st.success("Apuesta registrada. Se cerrará sola cuando el resultado del partido esté en los datos.")
 
 # ===== Pestaña 2: Mis apuestas =====
 with tab2:
     if not sheets_ok:
         st.info("Conecta Google Sheets para usar el registro.")
     else:
+        aviso = st.session_state.pop("aviso", None)
+        if aviso:
+            st.success(aviso)
         pend = df[df.Resultado == "Pendiente"]
         st.subheader("Apuestas pendientes")
+        if st.button("🔄 Revisar resultados ahora"):
+            n = cerrar_automaticas(df)
+            st.session_state["aviso"] = (f"Se cerraron {n} apuestas automáticamente." if n
+                                         else "No hay resultados nuevos para tus apuestas pendientes.")
+            st.rerun()
         if pend.empty:
             st.info("No tienes apuestas pendientes.")
         else:
             opciones = {i: f"{r.Local} vs {r.Visitante} · {r.Seleccion} · cuota {r.Cuota:.2f} · monto {r.Monto:.2f}"
                         for i, r in pend.iterrows()}
-            i = st.selectbox("Elige una apuesta", list(opciones), format_func=lambda k: opciones[k])
+            st.caption("Se cierran solas cuando el resultado aparece en los datos. "
+                       "Si un partido se suspendió, ciérralo aquí a mano como Nula.")
+            i = st.selectbox("Cerrar a mano", list(opciones), format_func=lambda k: opciones[k])
             res = st.radio("Resultado", CERRADAS, horizontal=True)
             if st.button("Cerrar apuesta"):
                 fila = df.loc[i]
@@ -226,7 +297,7 @@ with tab2:
                 else:
                     gan = 0.0
                 cerrar_apuesta(i, res, gan)
-                st.success("Apuesta cerrada.")
+                st.session_state["aviso"] = "Apuesta cerrada."
                 st.rerun()
         st.subheader("Historial")
         if df.empty:
