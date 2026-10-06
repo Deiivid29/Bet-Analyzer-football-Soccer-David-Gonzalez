@@ -285,6 +285,8 @@ with tab2:
             st.session_state["aviso"] = (f"Se cerraron {n} apuestas automáticamente." if n
                                          else "No hay resultados nuevos para tus apuestas pendientes.")
             st.rerun()
+        for nota in st.session_state.get("notas", []):
+            st.caption("• " + nota)
         if pend.empty:
             st.info("No tienes apuestas pendientes.")
         else:
