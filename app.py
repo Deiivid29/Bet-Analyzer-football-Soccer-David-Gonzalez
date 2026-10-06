@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from google.oauth2.service_account import Credentials
+from scipy.stats import poisson
 
 st.set_page_config(page_title="Analizador de partidos", page_icon="⚽")
 
@@ -18,9 +19,10 @@ CERRADAS = ["Ganada", "Perdida", "Nula"]
 def cargar():
     p = joblib.load("modelo_apuestas.joblib")
     h = pd.read_csv("historial.csv", parse_dates=["Date"])
-    return p["modelo"], p["columnas"], p["elo"], h
+    return (p["modelo"], p["columnas"], p["elo"], h,
+            p["goles_local"], p["goles_visitante"])
 
-modelo, columnas, elo, h = cargar()
+modelo, columnas, elo, h, gol_l, gol_v = cargar()
 
 def historial_equipo(liga, equipo):
     d = h[(h.Liga == liga) & ((h.HomeTeam == equipo) | (h.AwayTeam == equipo))].sort_values("Date")
@@ -46,7 +48,9 @@ def calcular(liga, local, visitante):
     f["Liga_" + liga] = 1.0
     x = pd.DataFrame([f]).reindex(columns=columnas, fill_value=0.0)
     pa, pe, ph = modelo.predict_proba(x)[0]   # orden: A, D, H
-    return ph, pe, pa, f, forma
+    glocal = float(gol_l.predict(x)[0])
+    gvisit = float(gol_v.predict(x)[0])
+    return ph, pe, pa, f, forma, glocal, gvisit
 
 # ---------- Google Sheets ----------
 @st.cache_resource
@@ -105,13 +109,19 @@ with tab1:
     visitante = st.selectbox("Visitante", [e for e in equipos if e != local])
 
     if st.button("Analizar", type="primary"):
-        ph, pe, pa, f, forma = calcular(liga, local, visitante)
+        ph, pe, pa, f, forma, glocal, gvisit = calcular(liga, local, visitante)
         st.session_state["an"] = dict(liga=liga, local=local, visitante=visitante,
-                                      ph=ph, pe=pe, pa=pa, f=f, forma=forma)
+                                      ph=ph, pe=pe, pa=pa, f=f, forma=forma,
+                                      glocal=glocal, gvisit=gvisit)
 
     an = st.session_state.get("an")
+    if an and "glocal" not in an:
+        an = None   # análisis viejo de una versión anterior: pedir analizar de nuevo
     if an:
         ph, pe, pa = an["ph"], an["pe"], an["pa"]
+        lam = an["glocal"] + an["gvisit"]
+        p_over = lambda linea: 1 - poisson.cdf(int(linea), lam)
+
         st.subheader(f"{an['local']} vs {an['visitante']}")
         a, b, c = st.columns(3)
         a.metric("Gana local", f"{ph:.1%}")
@@ -119,6 +129,9 @@ with tab1:
         c.metric("Gana visitante", f"{pa:.1%}")
         st.write(f"**Doble oportunidad:** Local o empate {ph+pe:.1%} · "
                  f"Local o visitante {ph+pa:.1%} · Empate o visitante {pe+pa:.1%}")
+        st.write(f"**Goles esperados:** {an['local']} {an['glocal']:.2f} · "
+                 f"{an['visitante']} {an['gvisit']:.2f} · total {lam:.2f}")
+        st.write(f"**Over:** 1.5 → {p_over(1.5):.1%} · 2.5 → {p_over(2.5):.1%} · 3.5 → {p_over(3.5):.1%}")
         st.write(f"**Elo:** {an['local']} {an['f']['L_Elo']:.0f} · "
                  f"{an['visitante']} {an['f']['V_Elo']:.0f}")
         for eq, (pts, gf, gc) in an["forma"].items():
@@ -133,6 +146,14 @@ with tab1:
         c1x = d1.number_input("Local o empate", min_value=0.0, value=0.0, step=0.05, key="c1x")
         c12 = d2.number_input("Local o visitante", min_value=0.0, value=0.0, step=0.05, key="c12")
         cx2 = d3.number_input("Empate o visitante", min_value=0.0, value=0.0, step=0.05, key="cx2")
+        e1, e2, e3 = st.columns(3)
+        ov15 = e1.number_input("Over 1.5", min_value=0.0, value=0.0, step=0.05, key="ov15")
+        ov25 = e2.number_input("Over 2.5", min_value=0.0, value=0.0, step=0.05, key="ov25")
+        ov35 = e3.number_input("Over 3.5", min_value=0.0, value=0.0, step=0.05, key="ov35")
+        g1, g2, g3 = st.columns(3)
+        un15 = g1.number_input("Under 1.5", min_value=0.0, value=0.0, step=0.05, key="un15")
+        un25 = g2.number_input("Under 2.5", min_value=0.0, value=0.0, step=0.05, key="un25")
+        un35 = g3.number_input("Under 3.5", min_value=0.0, value=0.0, step=0.05, key="un35")
 
         sel = {
             f"Gana {an['local']}": (ph, cl, "1X2"),
@@ -141,6 +162,12 @@ with tab1:
             "Local o empate": (ph + pe, c1x, "Doble oportunidad"),
             "Local o visitante": (ph + pa, c12, "Doble oportunidad"),
             "Empate o visitante": (pe + pa, cx2, "Doble oportunidad"),
+            "Over 1.5": (p_over(1.5), ov15, "Over/Under"),
+            "Over 2.5": (p_over(2.5), ov25, "Over/Under"),
+            "Over 3.5": (p_over(3.5), ov35, "Over/Under"),
+            "Under 1.5": (1 - p_over(1.5), un15, "Over/Under"),
+            "Under 2.5": (1 - p_over(2.5), un25, "Over/Under"),
+            "Under 3.5": (1 - p_over(3.5), un35, "Over/Under"),
         }
         filas = []
         for nombre, (prob, cuota, mercado) in sel.items():
