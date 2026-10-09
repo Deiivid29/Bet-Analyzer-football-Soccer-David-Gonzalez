@@ -8319,8 +8319,8 @@ Date,Liga,HomeTeam,AwayTeam,FTHG,FTAG,FTR
 2022-03-13,MLS,DC United,Chicago Fire,0,2,A
 2022-03-13,MLS,Orlando City,FC Cincinnati,1,2,A
 2022-03-13,MLS,Philadelphia Union,San Jose Earthquakes,2,0,H
-2022-03-13,MLS,FC Dallas,Nashville SC,2,0,H
 2022-03-13,Liga MX,Guadalajara Chivas,Club America,0,0,D
+2022-03-13,MLS,FC Dallas,Nashville SC,2,0,H
 2022-03-13,MLS,Colorado Rapids,Sporting Kansas City,2,0,H
 2022-03-13,Liga MX,Cruz Azul,UNAM Pumas,2,1,H
 2022-03-13,MLS,Atlanta Utd,Charlotte,2,1,H
@@ -15699,7 +15699,7 @@ Date,Liga,HomeTeam,AwayTeam,FTHG,FTAG,FTR
 2025-01-11,Bundesliga,Heidenheim,Union Berlin,2,0,H
 2025-01-11,Liga MX,Club Tijuana,Toluca,2,4,A
 2025-01-11,Serie A,Torino,Juventus,1,1,D
-2025-01-12,Liga MX,Cruz Azul,Atlas,1,1,D
+2025-01-12,Liga MX,UNAM Pumas,Necaxa,2,1,H
 2025-01-12,La Liga,Las Palmas,Getafe,1,2,A
 2025-01-12,Liga MX,Guadalajara Chivas,Santos Laguna,1,0,H
 2025-01-12,Bundesliga,RB Leipzig,Werder Bremen,4,2,H
@@ -15707,7 +15707,7 @@ Date,Liga,HomeTeam,AwayTeam,FTHG,FTAG,FTR
 2025-01-12,La Liga,Ath Madrid,Osasuna,1,0,H
 2025-01-12,Serie A,Napoli,Verona,2,0,H
 2025-01-12,Serie A,Bologna,Roma,2,2,D
-2025-01-12,Liga MX,UNAM Pumas,Necaxa,2,1,H
+2025-01-12,Liga MX,Cruz Azul,Atlas,1,1,D
 2025-01-12,Serie A,Genoa,Parma,1,0,H
 2025-01-12,Ligue 1,Paris SG,St Etienne,2,1,H
 2025-01-12,Ligue 1,Toulouse,Strasbourg,1,2,A
@@ -18304,8 +18304,8 @@ Date,Liga,HomeTeam,AwayTeam,FTHG,FTAG,FTR
 2026-01-04,Serie A,Verona,Torino,0,3,A
 2026-01-04,Premier League,Man City,Chelsea,1,1,D
 2026-01-04,Ligue 1,Paris SG,Paris FC,2,1,H
-2026-01-06,Serie A,Lecce,Roma,0,2,A
 2026-01-06,Serie A,Sassuolo,Juventus,0,3,A
+2026-01-06,Serie A,Lecce,Roma,0,2,A
 2026-01-06,Serie A,Pisa,Como,0,3,A
 2026-01-06,Premier League,West Ham,Nott'm Forest,1,2,A
 2026-01-07,Serie A,Torino,Udinese,1,2,A
@@ -19055,8 +19055,8 @@ Date,Liga,HomeTeam,AwayTeam,FTHG,FTAG,FTR
 2026-04-05,MLS,Charlotte,Philadelphia Union,2,1,H
 2026-04-05,MLS,DC United,FC Dallas,0,4,A
 2026-04-05,MLS,Inter Miami,Austin FC,2,2,D
-2026-04-05,MLS,New York City,St. Louis City,1,1,D
 2026-04-05,Serie A,Inter,Roma,5,2,H
+2026-04-05,MLS,New York City,St. Louis City,1,1,D
 2026-04-05,MLS,New York Red Bulls,FC Cincinnati,4,2,H
 2026-04-05,La Liga,Oviedo,Sevilla,1,0,H
 2026-04-05,La Liga,Valencia,Celta,2,3,A
@@ -19689,11 +19689,11 @@ Date,Liga,HomeTeam,AwayTeam,FTHG,FTAG,FTR
 2026-08-16,MLS,Atlanta Utd,New York Red Bulls,2,1,H
 2026-08-16,MLS,New York City,Philadelphia Union,2,3,A
 2026-08-16,MLS,Charlotte,Columbus Crew,3,1,H
-2026-08-16,Liga MX,Monterrey,Juarez,6,1,H
+2026-08-16,Liga MX,Atlas,Tigres UANL,2,1,H
 2026-08-16,La Liga,Espanol,Levante,3,0,H
 2026-08-16,Liga MX,Atlante,Toluca,0,0,D
 2026-08-16,Liga MX,UNAM Pumas,Queretaro,0,0,D
-2026-08-16,Liga MX,Atlas,Tigres UANL,2,1,H
+2026-08-16,Liga MX,Monterrey,Juarez,6,1,H
 2026-08-16,La Liga,Santander,Villarreal,2,2,D
 2026-08-17,MLS,Austin FC,FC Dallas,1,2,A
 2026-08-17,Liga MX,Club America,Atl. San Luis,3,0,H
@@ -19765,12 +19765,12 @@ Date,Liga,HomeTeam,AwayTeam,FTHG,FTAG,FTR
 2026-08-23,Serie A,Atalanta,Sassuolo,2,1,H
 2026-08-23,Serie A,Venezia,Lecce,0,2,A
 2026-08-23,Serie A,Frosinone,Juventus,0,1,A
-2026-08-23,La Liga,Elche,Barcelona,0,5,A
+2026-08-23,La Liga,Getafe,Santander,1,0,H
 2026-08-23,La Liga,Ath Madrid,Villarreal,2,2,D
 2026-08-23,Liga MX,Puebla,Santos Laguna,3,2,H
 2026-08-23,MLS,Inter Miami,Toronto FC,1,2,A
 2026-08-23,Liga MX,Cruz Azul,Atlas,0,2,A
-2026-08-23,La Liga,Getafe,Santander,1,0,H
+2026-08-23,La Liga,Elche,Barcelona,0,5,A
 2026-08-23,Premier League,Man City,Bournemouth,2,1,H
 2026-08-23,Premier League,Brighton,Aston Villa,4,0,H
 2026-08-23,Premier League,Newcastle,Liverpool,2,2,D
@@ -20120,3 +20120,4 @@ Date,Liga,HomeTeam,AwayTeam,FTHG,FTAG,FTR
 2026-09-28,MLS,Columbus Crew,Inter Miami,2,1,H
 2026-10-01,MLS,New York Red Bulls,St. Louis City,0,3,A
 2026-10-02,MLS,Seattle Sounders,Sporting Kansas City,2,1,H
+2026-10-07,MLS,Chicago Fire,Vancouver Whitecaps,3,1,H
